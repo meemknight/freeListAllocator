@@ -104,25 +104,24 @@ void* FreeListAllocator::allocate(size_t size)
 					size_t size = this->getEnd() - (size_t)nextFreeBlock - (size_t)sizeof(FreeBlock); //set the size of the new last block
 					nextFreeBlock->size = size;
 
+					return toReturn;
 				}
 				
 			}else //this is not the last free block 
-			{
+			{	
 				
-				if(last == nullptr) // this is the first free block but not the last
+				if(last == nullptr) // this is the first free block but not the last 
 				{
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
 					((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
 
-					FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
-					//next free block is the base memory now
+					FreeBlock* nextFreeBlock = next;
+					//next free block is the next block
 
 					baseMemory = (char*)nextFreeBlock;
-					((FreeBlock*)baseMemory)->next = (char*)next; //this is not the last block
 
-					size_t size = this->getEnd() - (size_t)nextFreeBlock - (size_t)sizeof(FreeBlock); //set the size of the new last block
-					((FreeBlock*)baseMemory)->size = size;
+					return toReturn;
 				}else // this is not the first free block and not the last 
 				{
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
@@ -136,6 +135,8 @@ void* FreeListAllocator::allocate(size_t size)
 
 					size_t size = this->getEnd() - (size_t)nextFreeBlock - (size_t)sizeof(FreeBlock); //set the size of the new last block
 					nextFreeBlock->size = size;
+
+					return toReturn;
 				}
 			}
 
@@ -201,8 +202,13 @@ void FreeListAllocator::free(void* mem)
 
 		}else
 		{	//this doesn't merge with the next free block so just link them
-			int a = 0;
+			size_t sizeOfTheFreedBlock = allocatedBLockHeader->size;
+			FreeBlock* firstFreeBlock = (FreeBlock*)allocatedBLockHeader;
 
+			firstFreeBlock->next = this->baseMemory;
+			firstFreeBlock->size = sizeOfTheFreedBlock;
+
+			this->baseMemory = (char*)firstFreeBlock;
 		}
 
 	
