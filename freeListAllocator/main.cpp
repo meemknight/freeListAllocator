@@ -1,5 +1,7 @@
 #include <iostream>
 #include "freeListAllocator.h"
+#include <algorithm>
+#include <array>
 
 #define KB(x) (x) * 1024
 #define MB(x) KB((x)) * 1024
@@ -8,78 +10,39 @@
 
 int main()
 {
-	char memBlock[120] = {};
+	char memBlock[KB(2)] = {};
 
 	FreeListAllocator allocator;
-	allocator.init(memBlock+1, sizeof(memBlock)-1);
-	
-	while(1)
+	allocator.init(memBlock + 1, sizeof(memBlock) - 1);
+
+	constexpr int allocations = 20;
+	constexpr int testsNr = 2000;
+
+	std::array<void*, allocations> ptrs;
+
+	for(int test =0; test< testsNr; test++)
 	{
+		for(int i=0; i< allocations; i++)
+		{
+			ptrs[i] = allocator.allocate(12);
+		}
 
-		char* a = (char*)allocator.allocate(8);	
-		char* b = (char*)allocator.allocate(8);
-	
-		allocator.free(a);
-		allocator.free(b);
-	
-		char* c = (char*)allocator.allocate(60);
-		allocator.free(c);
+		std::random_shuffle(ptrs.begin(), ptrs.end());
 
-
-		b = (char*)allocator.allocate(8);
-		a = (char*)allocator.allocate(8);
-		c = (char*)allocator.allocate(30);
-
-		allocator.free(a);
-		allocator.free(b);
-		allocator.free(c);
-
-		b = (char*)allocator.allocate(8);
-		a = (char*)allocator.allocate(8);
-		c = (char*)allocator.allocate(30);
-
-		allocator.free(c);
-		allocator.free(b);
-		allocator.free(a);
-
-		b = (char*)allocator.allocate(8);
-		a = (char*)allocator.allocate(8);
-		c = (char*)allocator.allocate(30);
-
-		allocator.free(b);
-		allocator.free(a);
-		allocator.free(c);
-
-		b = (char*)allocator.allocate(8);
-		a = (char*)allocator.allocate(8);
-		c = (char*)allocator.allocate(8);
-		char* d = (char*)allocator.allocate(8);
-
-		allocator.free(a);
-		allocator.free(b);
-		allocator.free(d);
-		allocator.free(c);
-
-		b = (char*)allocator.allocate(8);
-		a = (char*)allocator.allocate(8);
-		c = (char*)allocator.allocate(8);
-		d = (char*)allocator.allocate(8);
-
-		allocator.free(c);
-		allocator.free(d);
-		allocator.free(b);
-		allocator.free(a);
+		for (int i = 0; i < allocations; i++)
+		{
+			allocator.free(ptrs[i]);
+		}
 
 	}
 
+	//check integrity
 
+	allocator.allocate(KB(2) - 46);
 
-
-
-	allocator.allocate(8);
 
 	//allocator.allocate(4);
 
 
-
+	return 0;
 }

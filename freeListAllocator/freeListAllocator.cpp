@@ -66,6 +66,8 @@ void* FreeListAllocator::allocate(size_t size)
 	while(true)
 	{
 	
+		//todo handle case when allocate near end
+		//todo handle case when a very small block remains
 
 		if (aligned8Size <= ((FreeBlock*)current)->size) // this is a suitable block
 		{
@@ -260,7 +262,6 @@ void FreeListAllocator::free(void* mem)
 					newCurent = thisBlock;
 				}
 
-				//todo now check the block after
 				if(next != nullptr && next < this->end)
 				{
 				
