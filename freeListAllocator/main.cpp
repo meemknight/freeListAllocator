@@ -11,15 +11,13 @@ int main()
 	char memBlock[120] = {};
 
 	FreeListAllocator allocator;
-	allocator.init(memBlock, sizeof(memBlock));
+	allocator.init(memBlock+1, sizeof(memBlock)-1);
 	
 	while(1)
 	{
-	
 
 		char* a = (char*)allocator.allocate(8);	
 		char* b = (char*)allocator.allocate(8);
-	
 	
 		allocator.free(a);
 		allocator.free(b);
@@ -28,30 +26,51 @@ int main()
 		allocator.free(c);
 
 
-	}
-
-
-
-	while(1)
-	{
-
-		char* a = (char*)allocator.allocate(8);
-
-		a[0] = 'X';
-		a[1] = 'x';
-		a[2] = 'x';
-		a[3] = 'x';
-		a[4] = 'x';
-		a[5] = 'x';
-		a[6] = 'x';
-		a[7] = 'x';
+		b = (char*)allocator.allocate(8);
+		a = (char*)allocator.allocate(8);
+		c = (char*)allocator.allocate(30);
 
 		allocator.free(a);
+		allocator.free(b);
+		allocator.free(c);
 
-	
+		b = (char*)allocator.allocate(8);
+		a = (char*)allocator.allocate(8);
+		c = (char*)allocator.allocate(30);
+
+		allocator.free(c);
+		allocator.free(b);
+		allocator.free(a);
+
+		b = (char*)allocator.allocate(8);
+		a = (char*)allocator.allocate(8);
+		c = (char*)allocator.allocate(30);
+
+		allocator.free(b);
+		allocator.free(a);
+		allocator.free(c);
+
+		b = (char*)allocator.allocate(8);
+		a = (char*)allocator.allocate(8);
+		c = (char*)allocator.allocate(8);
+		char* d = (char*)allocator.allocate(8);
+
+		allocator.free(a);
+		allocator.free(b);
+		allocator.free(d);
+		allocator.free(c);
+
+		b = (char*)allocator.allocate(8);
+		a = (char*)allocator.allocate(8);
+		c = (char*)allocator.allocate(8);
+		d = (char*)allocator.allocate(8);
+
+		allocator.free(c);
+		allocator.free(d);
+		allocator.free(b);
+		allocator.free(a);
+
 	}
-
-
 
 
 
