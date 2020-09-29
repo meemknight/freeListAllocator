@@ -72,9 +72,9 @@ void* FreeListAllocator::allocate(size_t size)
 			//add block here
 			next = (FreeBlock*)current->next;
 
-			if(next == nullptr) //this is the last block
+			if(next == nullptr || next >= this->end) //this is the last block
 			{
-				if(last == nullptr) //this is also the first block so move the base pointer
+				if(last == nullptr || last >= this->end) //this is also the first block so move the base pointer
 				{
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
@@ -110,7 +110,7 @@ void* FreeListAllocator::allocate(size_t size)
 			}else //this is not the last free block 
 			{	
 				
-				if(last == nullptr) // this is the first free block but not the last 
+				if(last == nullptr || last >= this->end) // this is the first free block but not the last 
 				{
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
@@ -142,7 +142,7 @@ void* FreeListAllocator::allocate(size_t size)
 
 		}else
 		{
-			if(current->next == nullptr)
+			if(current->next == nullptr || current->next >= this->end)
 			{
 				//that was the last block, no size
 				std::cout << "no more memory";
@@ -180,8 +180,10 @@ void FreeListAllocator::free(void* mem)
 	
 	//todo add optional logging
 	assert(allocatedBLockHeader->dummy_ == DUMMY_VALUE); //invalid free or double free
-
+	allocatedBLockHeader->dummy_ = 0;
 #pragma endregion
+
+	size_t sizeOfTheFreedBlock = allocatedBLockHeader->size;
 
 	if(headerBegin < this->baseMemory) 
 	{
@@ -192,7 +194,6 @@ void FreeListAllocator::free(void* mem)
 		{	
 			//this merges with the current first free block so merge them
 
-			size_t sizeOfTheFreedBlock = allocatedBLockHeader->size;
 
 			FreeBlock* firstFreeBlock = (FreeBlock*)allocatedBLockHeader;
 			firstFreeBlock->next = ((FreeBlock*)this->baseMemory)->next;
@@ -214,8 +215,92 @@ void FreeListAllocator::free(void* mem)
 	
 	}else
 	{
-	
-	
+		//the freed block is somewhere in the middle
+		//first search for the blocks before and after it
+		
+		FreeBlock* current = (FreeBlock*)baseMemory;
+		FreeBlock* next = (FreeBlock*)current->next;
+
+		while (true)
+		{
+			
+			if ((current < headerBegin && headerBegin < next)
+				||
+				(current < headerBegin && (next == nullptr || next >= this->end))
+				)
+			{
+				//the block is between 2 blocks
+				FreeBlock* theBlockBefore = current;
+				FreeBlock* theBlockAfter = (FreeBlock*)current->next;
+				
+				//merge with the block before
+				
+				FreeBlock* newCurent = nullptr;
+				//check if merged
+				if ((size_t)theBlockBefore + sizeof(FreeBlock) + theBlockBefore->size == (size_t)headerBegin)
+				{
+					//merge
+					theBlockBefore->size += sizeof(FreeBlock) + sizeOfTheFreedBlock;
+
+					newCurent = theBlockBefore;
+				}
+				else if ((size_t)theBlockBefore + sizeof(FreeBlock) + theBlockBefore->size > (size_t)headerBegin)
+				{
+					//error heap corupted
+					assert(0);
+				}
+				else
+				{
+					//just link, no merge
+					theBlockBefore->next = (char*)headerBegin;
+					FreeBlock* thisBlock = (FreeBlock*)headerBegin;
+					thisBlock->next = nullptr;
+					thisBlock->size = sizeOfTheFreedBlock;
+
+					newCurent = thisBlock;
+				}
+
+				//todo now check the block after
+				if(next != nullptr && next < this->end)
+				{
+				
+					if((size_t)newCurent + sizeof(FreeBlock) + newCurent->size == (size_t)next)
+					{
+						//merge
+						newCurent->size += sizeof(FreeBlock) + next->size;
+
+					}else if((size_t)newCurent + sizeof(FreeBlock) + newCurent->size > (size_t)next)
+					{
+						//err
+						assert(0);
+					}else
+					{
+					//just link
+					newCurent->next = (char*)next;
+					}
+
+				}
+
+				
+
+
+				break;
+			}
+
+			current = (FreeBlock*)current->next;
+			next = (FreeBlock*)current->next;
+		
+			if(current == nullptr || current >= this->end)
+			{
+				//heap corupted or freed an invalid value
+				assert(0);
+			}
+		}
 	}
 
 }
+
+
+/*
+
+*/
