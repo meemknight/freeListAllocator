@@ -145,7 +145,7 @@ void* FreeListAllocator::allocate(size_t size)
 			if(current->next == nullptr || current->next >= this->end)
 			{
 				//that was the last block, no size
-				std::cout << "no more memory";
+				std::cout << "no more memory\n";
 				assert(0);
 			}else
 			{
@@ -190,7 +190,7 @@ void FreeListAllocator::free(void* mem)
 		//the freed memory is before the base memory so change the base memory
 		//this is the new base memory
 
-		if((char*)headerBegin + sizeof(AllocatedBlock)+ allocatedBLockHeader->size == this->baseMemory)
+		if((size_t)headerBegin + sizeof(AllocatedBlock)+ (size_t)allocatedBLockHeader->size == (size_t)this->baseMemory)
 		{	
 			//this merges with the current first free block so merge them
 
@@ -268,6 +268,7 @@ void FreeListAllocator::free(void* mem)
 					{
 						//merge
 						newCurent->size += sizeof(FreeBlock) + next->size;
+						newCurent->next = next->next;
 
 					}else if((size_t)newCurent + sizeof(FreeBlock) + newCurent->size > (size_t)next)
 					{
@@ -282,8 +283,6 @@ void FreeListAllocator::free(void* mem)
 				}
 
 				
-
-
 				break;
 			}
 

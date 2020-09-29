@@ -10,7 +10,6 @@ int main()
 {
 	char memBlock[120] = {};
 
-
 	FreeListAllocator allocator;
 	allocator.init(memBlock, sizeof(memBlock));
 	
@@ -25,15 +24,9 @@ int main()
 		allocator.free(a);
 		allocator.free(b);
 	
-		//char* c = (char*)allocator.allocate(60);
-		//allocator.free(c);
+		char* c = (char*)allocator.allocate(60);
+		allocator.free(c);
 
-		a = (char*)allocator.allocate(16);
-		b = (char*)allocator.allocate(20);
-
-
-		allocator.free(b);
-		allocator.free(a);
 
 	}
 
