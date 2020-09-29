@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <iostream>
 
+// todo rename
 const uint64_t DUMMY_VALUE = 0xff'ff'ff'ff'ff'ff'ff'ff;
 
 struct FreeBlock
@@ -19,7 +20,7 @@ struct FreeBlock
 struct AllocatedBlock
 {
 	std::uint64_t size;
-	std::uint64_t dummy_;
+	std::uint64_t dummy_; // todo rename
 };
 
 
@@ -27,7 +28,8 @@ void FreeListAllocator::init(void* baseMemory, size_t memorySize)
 {
 	end = (void*)((size_t)baseMemory + memorySize);
 
-	assert(sizeof(FreeBlock) == sizeof(AllocatedBlock));
+	static_assert(sizeof(FreeBlock) == sizeof(AllocatedBlock), "");
+
 	assert(memorySize > 100);
 
 	this->baseMemory = (char*)baseMemory;
@@ -163,4 +165,51 @@ void* FreeListAllocator::allocate(size_t size)
 
 void FreeListAllocator::free(void* mem)
 {
+	char* memoryBegin = (char*)mem;
+
+	//mem is the beginning of the valid memory, \
+	the header is then 16 bytes lower
+
+	void* headerBegin = memoryBegin - sizeof(AllocatedBlock);
+
+	AllocatedBlock* allocatedBLockHeader = (AllocatedBlock*)headerBegin;
+
+#pragma region check validity
+	//todo make this a controllable macro
+	
+	//todo add optional logging
+	assert(allocatedBLockHeader->dummy_ == DUMMY_VALUE); //invalid free or double free
+
+#pragma endregion
+
+	if(headerBegin < this->baseMemory) 
+	{
+		//the freed memory is before the base memory so change the base memory
+		//this is the new base memory
+
+		if((char*)headerBegin + sizeof(AllocatedBlock)+ allocatedBLockHeader->size == this->baseMemory)
+		{	
+			//this merges with the current first free block so merge them
+
+			size_t sizeOfTheFreedBlock = allocatedBLockHeader->size;
+
+			FreeBlock* firstFreeBlock = (FreeBlock*)allocatedBLockHeader;
+			firstFreeBlock->next = ((FreeBlock*)this->baseMemory)->next;
+			firstFreeBlock->size = sizeOfTheFreedBlock + sizeof(FreeBlock) + ((FreeBlock*)this->baseMemory)->size;
+
+			this->baseMemory = (char*)firstFreeBlock;
+
+		}else
+		{	//this doesn't merge with the next free block so just link them
+			int a = 0;
+
+		}
+
+	
+	}else
+	{
+	
+	
+	}
+
 }
