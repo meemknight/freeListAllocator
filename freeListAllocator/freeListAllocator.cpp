@@ -3,6 +3,46 @@
 #include <cstdint>
 #include <iostream>
 
+#define KB(x) (x) * 1024
+#define MB(x) KB((x)) * 1024
+#define GB(x) MB((x)) * 1024
+
+char memBlock[MB(10)] = {};
+FreeListAllocator allocator(memBlock, sizeof(memBlock));
+
+void* operator new  (std::size_t count)
+{
+	auto a = allocator.allocate(count);
+
+	std::cout << "Allocated " << count << " at " << a << '\n';
+
+	return a;
+}
+
+void* operator new[](std::size_t count)
+{
+	auto a = allocator.allocate(count);
+
+	std::cout << "Allocated " << count << " at " << a << '\n';
+
+	return a;
+}
+
+void operator delete  (void* ptr)
+{
+	std::cout << "deallocated at: " << ptr << "\n";
+
+	allocator.free(ptr);
+}
+
+void operator delete[](void* ptr)
+{
+	std::cout << "deallocated at: " << ptr << "\n";
+
+	allocator.free(ptr);
+}
+
+
 // todo rename
 const uint64_t DUMMY_VALUE = 0xff'ff'ff'ff'ff'ff'ff'ff;
 
@@ -158,20 +198,58 @@ void* FreeListAllocator::allocate(size_t size)
 
 					
 				}else // this is not the first free block and not the last 
-				{
+				{	//todo fix here
+
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
-					((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
-					((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+					size_t currentSize = ((FreeBlock*)current)->size;
 
-					FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
+					if (currentSize - aligned8Size < 24)
+					{ 
+						//too small block remaining
+						if (currentSize - aligned8Size < 0 || (currentSize - aligned8Size) % 8 != 0)
+						{
+							//heap corrupted
+							assert(0);
+						}
+					
+						aligned8Size += (currentSize - aligned8Size);
 
-					last->next = (char*)nextFreeBlock; //last is relinked
-					nextFreeBlock->next = (char*)next; //this is not the last block
+						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
+						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
 
-					size_t size = this->getEnd() - (size_t)nextFreeBlock - (size_t)sizeof(FreeBlock); //set the size of the new last block
-					nextFreeBlock->size = size;
+						//FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
 
-					return toReturn;
+						last->next = (char*)next; //last is relinked
+						//nextFreeBlock->next = (char*)next; //this is not the last block
+
+						//size_t size = this->getEnd() - (size_t)nextFreeBlock - (size_t)sizeof(FreeBlock); //set the size of the new last block
+						//nextFreeBlock->size = size;
+
+						return toReturn;
+					
+					}else
+					{
+						//add a new block
+						FreeBlock* newCreatedBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
+						newCreatedBlock->size = currentSize - aligned8Size - sizeof(AllocatedBlock);
+						newCreatedBlock->next = (char*)next;
+
+						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
+						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+
+						//FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
+
+						last->next = (char*)newCreatedBlock; //last is relinked
+						//nextFreeBlock->next = (char*)next; //this is not the last block
+
+						//size_t size = this->getEnd() - (size_t)nextFreeBlock - (size_t)sizeof(FreeBlock); //set the size of the new last block
+						//nextFreeBlock->size = size;
+
+						return toReturn;
+						
+					}
+
+					
 				}
 			}
 
@@ -339,6 +417,22 @@ void FreeListAllocator::free(void* mem)
 }
 
 
-/*
+void* FreeListAllocator::threadSafeAllocate(size_t size)
+{
+	mu.lock();
 
-*/
+	auto a = this->allocate(size);
+
+	mu.unlock();
+
+	return a;
+}
+
+void FreeListAllocator::threadSafeFree(void* mem)
+{
+	mu.lock();
+
+	this->free(mem);
+
+	mu.unlock();
+}

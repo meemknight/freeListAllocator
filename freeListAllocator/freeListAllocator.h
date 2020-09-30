@@ -1,5 +1,5 @@
 #pragma once
-
+#include <mutex>
 
 struct FreeListAllocator
 {
@@ -17,9 +17,15 @@ struct FreeListAllocator
 
 	void free(void* mem);
 
+	void* threadSafeAllocate(size_t size);
+
+	void threadSafeFree(void* mem);
+
 private:
 	
 	void* end;
+
+	std::mutex mu;
 
 	size_t getEnd()
 	{
