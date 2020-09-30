@@ -4,9 +4,12 @@
 struct FreeListAllocator
 {
 	char *baseMemory;
-	size_t memorySize;
 
 	FreeListAllocator() = default;
+	FreeListAllocator(void* baseMemory, size_t memorySize) 
+	{
+		init(baseMemory, memorySize);
+	}
 
 	void init(void* baseMemory, size_t memorySize);
 	
