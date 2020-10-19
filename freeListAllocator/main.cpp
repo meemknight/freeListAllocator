@@ -6,6 +6,11 @@
 
 int main()
 {
+	
+	{
+		std::string s = "adfggr";
+	}
+
 
 
 	return 0;

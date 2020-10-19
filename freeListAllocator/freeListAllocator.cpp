@@ -3,12 +3,20 @@
 #include <cstdint>
 #include <iostream>
 
-#define KB(x) (x) * 1024
-#define MB(x) KB((x)) * 1024
-#define GB(x) MB((x)) * 1024
+#if LINK_TO_GLOBAL_ALLOCATOR == 1
 
-char memBlock[MB(10)] = {};
+char memBlock[HEAP_SIZE] = {};
+
+#if WINDOWS_DYNAMIC_IMPLEMENTATION == 1
+
+FreeListAllocatorWinSpecific allocator(GB(15));
+
+#else
+
 FreeListAllocator allocator(memBlock, sizeof(memBlock));
+
+#endif
+
 
 void* operator new  (std::size_t count)
 {
@@ -30,17 +38,20 @@ void* operator new[](std::size_t count)
 
 void operator delete  (void* ptr)
 {
-	std::cout << "deallocated at: " << ptr << "\n";
+	std::cout << "Deallocated at: " << ptr << "\n";
 
 	allocator.free(ptr);
 }
 
 void operator delete[](void* ptr)
 {
-	std::cout << "deallocated at: " << ptr << "\n";
+	std::cout << "Deallocated at: " << ptr << "\n";
 
 	allocator.free(ptr);
 }
+
+#endif // LINK_TO_GLOBAL_ALLOCATOR
+
 
 
 // todo rename
@@ -92,6 +103,9 @@ void FreeListAllocator::init(void* baseMemory, size_t memorySize)
 
 void* FreeListAllocator::allocate(size_t size)
 {
+	//todo optional check
+	assert(baseMemory); //err allocator not initialized
+
 
 	FreeBlock *last = nullptr;
 	FreeBlock *current = (FreeBlock*)baseMemory;
@@ -258,8 +272,17 @@ void* FreeListAllocator::allocate(size_t size)
 			if(current->next == nullptr || current->next >= this->end)
 			{
 				//that was the last block, no size
+				//todo remove notice
 				std::cout << "no more memory\n";
-				assert(0);
+
+				if(returnZeroIfNoMoreMemory)
+				{
+					return 0;
+				}else
+				{
+					assert(0);
+				}
+
 			}else
 			{
 				last = current;
@@ -272,7 +295,7 @@ void* FreeListAllocator::allocate(size_t size)
 
 	}
 
-
+	assert(0);
 	return nullptr;
 }
 
@@ -436,3 +459,100 @@ void FreeListAllocator::threadSafeFree(void* mem)
 
 	mu.unlock();
 }
+
+
+
+#if WINDOWS_DYNAMIC_IMPLEMENTATION == 1
+
+#include <Windows.h>
+
+
+void FreeListAllocatorWinSpecific::init(size_t memorySize)
+{
+	auto base = VirtualAlloc(nullptr, memorySize, MEM_RESERVE, PAGE_READWRITE);
+
+	beginOfAllocatedSpace = base;
+	endOfReservedSpace = (char*)base + memorySize;
+	endOfAllocatedSpace = base;
+	
+	assert(extendAllocatedMemory(KB(1)));
+
+	allocator.returnZeroIfNoMoreMemory = true;
+	allocator.init(base, memorySize);
+
+}
+
+inline void* FreeListAllocatorWinSpecific::allocate(size_t size)
+{
+	void* rez = 0;
+
+	while(true)
+	{
+		rez = allocator.allocate(size);
+
+		if(rez == nullptr)
+		{
+			assert(this->extendAllocatedMemory(size));
+		}else
+		{
+			break;
+		}
+	}
+
+	return rez;
+
+}
+
+inline void FreeListAllocatorWinSpecific::free(void* mem)
+{
+	allocator.free(mem);
+}
+
+inline void* FreeListAllocatorWinSpecific::threadSafeAllocate(size_t size)
+{
+	void* rez = 0;
+
+	while (true)
+	{
+		rez = allocator.threadSafeAllocate(size);
+
+		if (rez == nullptr)
+		{
+			assert(this->extendAllocatedMemory(size));
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	return rez;
+
+}
+
+inline void FreeListAllocatorWinSpecific::threadSafeFree(void* mem)
+{
+	allocator.threadSafeFree(mem);
+}
+
+bool FreeListAllocatorWinSpecific::extendAllocatedMemory(size_t size)
+{
+	if((char*)endOfAllocatedSpace + size > endOfReservedSpace)
+	{
+		return false;
+	}
+
+	size_t sizeToAllcoate = ((char*)endOfAllocatedSpace - (char*)beginOfAllocatedSpace) + size;
+
+	auto rez = VirtualAlloc(beginOfAllocatedSpace, sizeToAllcoate,
+		MEM_COMMIT, PAGE_READWRITE);
+
+	endOfAllocatedSpace = ((char*)endOfAllocatedSpace) + size;
+
+	if (!rez) 
+	{ return false; }
+
+	return true;
+}
+
+#endif
