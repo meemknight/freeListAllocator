@@ -547,10 +547,14 @@ bool FreeListAllocatorWinSpecific::extendAllocatedMemory(size_t size)
 	auto rez = VirtualAlloc(beginOfAllocatedSpace, sizeToAllcoate,
 		MEM_COMMIT, PAGE_READWRITE);
 
+
+	if (!rez)
+	{
+		return false;
+	}
+
 	endOfAllocatedSpace = ((char*)endOfAllocatedSpace) + size;
 
-	if (!rez) 
-	{ return false; }
 
 	return true;
 }
