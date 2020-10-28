@@ -1,15 +1,20 @@
+//////////////////////////////////////////////////
+//freeListAllocator.h				beta 0.1
+//Copyright(c) 2020 Luta Vlad
+//https://github.com/meemknight/freeListAllocator
+//////////////////////////////////////////////////
+
 #pragma once
 #include <mutex>
 
-#define KB(x) (x) * 1024
-#define MB(x) KB((x)) * 1024
-#define GB(x) MB((x)) * 1024
+#define KB(x) (x) * 1024l
+#define MB(x) KB((x)) * 1024l
+#define GB(x) MB((x)) * 1024l
 
+///set this to 1 if you want to link to new/delete
+///also set the heap size,
 #define LINK_TO_GLOBAL_ALLOCATOR 1
 #define HEAP_SIZE MB(10)
-
-///set this to 0 if you want to compile on other platforms
-#define WINDOWS_DYNAMIC_IMPLEMENTATION 1
 
 
 struct FreeListAllocator
@@ -51,6 +56,12 @@ private:
 };
 
 
+//todo (vlod): implement
+#if 0
+
+///set this to 0 if you want to compile on other platforms
+#define WINDOWS_DYNAMIC_IMPLEMENTATION 1
+
 struct FreeListAllocatorWinSpecific
 {
 	
@@ -81,3 +92,4 @@ private:
 
 };
 
+#endif

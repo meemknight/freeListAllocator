@@ -1,3 +1,10 @@
+//////////////////////////////////////////////////
+//freeListAllocator.h				beta 0.1
+//Copyright(c) 2020 Luta Vlad
+//https://github.com/meemknight/freeListAllocator
+//////////////////////////////////////////////////
+
+
 #include "freeListAllocator.h"
 #include <cassert>
 #include <cstdint>
@@ -5,7 +12,6 @@
 
 #if LINK_TO_GLOBAL_ALLOCATOR == 1
 
-char memBlock[HEAP_SIZE] = {};
 
 #if WINDOWS_DYNAMIC_IMPLEMENTATION == 1
 
@@ -13,10 +19,14 @@ FreeListAllocatorWinSpecific allocator(GB(15));
 
 #else
 
+char memBlock[HEAP_SIZE] = {};
 FreeListAllocator allocator(memBlock, sizeof(memBlock));
 
 #endif
 
+
+//todo (vlod): Add c++17 overloads
+//todo add own assert
 
 void* operator new  (std::size_t count)
 {
@@ -55,7 +65,7 @@ void operator delete[](void* ptr)
 
 
 // todo rename
-const uint64_t DUMMY_VALUE = 0xff'ff'ff'ff'ff'ff'ff'ff;
+const uint64_t GUARD_VALUE = 0xff'ff'ff'ff'ff'ff'ff'ff;
 
 struct FreeBlock
 {
@@ -71,7 +81,7 @@ struct FreeBlock
 struct AllocatedBlock
 {
 	std::uint64_t size;
-	std::uint64_t dummy_; // todo rename
+	std::uint64_t guard;
 };
 
 
@@ -104,6 +114,8 @@ void FreeListAllocator::init(void* baseMemory, size_t memorySize)
 void* FreeListAllocator::allocate(size_t size)
 {
 	//todo optional check
+
+
 	assert(baseMemory); //err allocator not initialized
 
 
@@ -135,7 +147,7 @@ void* FreeListAllocator::allocate(size_t size)
 				{
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
-					((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+					((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 					FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size); 
 					//next free block is the base memory now
@@ -151,7 +163,7 @@ void* FreeListAllocator::allocate(size_t size)
 				{
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
-					((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+					((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 					FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
 
@@ -186,7 +198,7 @@ void* FreeListAllocator::allocate(size_t size)
 						aligned8Size += (currentSize - aligned8Size);
 
 						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
-						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+						((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 						FreeBlock* nextFreeBlock = next;
 						//next free block is the next block
@@ -203,7 +215,7 @@ void* FreeListAllocator::allocate(size_t size)
 						newCreatedBlock->next = (char*)next;
 
 						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
-						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+						((AllocatedBlock*)current)->guard = GUARD_VALUE;
 						baseMemory = (char*)newCreatedBlock;
 
 						return toReturn;
@@ -217,7 +229,7 @@ void* FreeListAllocator::allocate(size_t size)
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					size_t currentSize = ((FreeBlock*)current)->size;
 
-					if (currentSize - aligned8Size < 24)
+					if (currentSize - aligned8Size < 24) 
 					{ 
 						//too small block remaining
 						if (currentSize - aligned8Size < 0 || (currentSize - aligned8Size) % 8 != 0)
@@ -229,7 +241,7 @@ void* FreeListAllocator::allocate(size_t size)
 						aligned8Size += (currentSize - aligned8Size);
 
 						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
-						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+						((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 						//FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
 
@@ -249,7 +261,7 @@ void* FreeListAllocator::allocate(size_t size)
 						newCreatedBlock->next = (char*)next;
 
 						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
-						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+						((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 						//FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
 
@@ -315,8 +327,8 @@ void FreeListAllocator::free(void* mem)
 	//todo make this a controllable macro
 	
 	//todo add optional logging
-	assert(allocatedBLockHeader->dummy_ == DUMMY_VALUE); //invalid free or double free
-	allocatedBLockHeader->dummy_ = 0;
+	assert(allocatedBLockHeader->guard == GUARD_VALUE); //invalid free or double free
+	allocatedBLockHeader->guard = 0;
 #pragma endregion
 
 	size_t sizeOfTheFreedBlock = allocatedBLockHeader->size;
