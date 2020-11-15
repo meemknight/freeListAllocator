@@ -1,11 +1,14 @@
+//////////////////////////////////////////////////
+//freeListAllocator.h				beta 0.1
+//Copyright(c) 2020 Luta Vlad
+//https://github.com/meemknight/freeListAllocator
+//////////////////////////////////////////////////
+
 #include "freeListAllocator.h"
-#include <cassert>
 #include <cstdint>
-#include <iostream>
 
 #if LINK_TO_GLOBAL_ALLOCATOR == 1
 
-char memBlock[HEAP_SIZE] = {};
 
 #if WINDOWS_DYNAMIC_IMPLEMENTATION == 1
 
@@ -13,16 +16,20 @@ FreeListAllocatorWinSpecific allocator(GB(15));
 
 #else
 
+char memBlock[HEAP_SIZE] = {};
 FreeListAllocator allocator(memBlock, sizeof(memBlock));
 
 #endif
 
 
+//todo (vlod): Add c++17 overloads
+//todo add own assert
+
 void* operator new  (std::size_t count)
 {
 	auto a = allocator.allocate(count);
 
-	std::cout << "Allocated " << count << " at " << a << '\n';
+	//std::cout << "Allocated " << count << " at " << a << '\n';
 
 	return a;
 }
@@ -31,21 +38,21 @@ void* operator new[](std::size_t count)
 {
 	auto a = allocator.allocate(count);
 
-	std::cout << "Allocated " << count << " at " << a << '\n';
+	//std::cout << "Allocated " << count << " at " << a << '\n';
 
 	return a;
 }
 
 void operator delete  (void* ptr)
 {
-	std::cout << "Deallocated at: " << ptr << "\n";
+	//std::cout << "Deallocated at: " << ptr << "\n";
 
 	allocator.free(ptr);
 }
 
 void operator delete[](void* ptr)
 {
-	std::cout << "Deallocated at: " << ptr << "\n";
+	//std::cout << "Deallocated at: " << ptr << "\n";
 
 	allocator.free(ptr);
 }
@@ -53,13 +60,11 @@ void operator delete[](void* ptr)
 #endif // LINK_TO_GLOBAL_ALLOCATOR
 
 
-
-// todo rename
-const uint64_t DUMMY_VALUE = 0xff'ff'ff'ff'ff'ff'ff'ff;
+const uint64_t GUARD_VALUE = 0xff'ff'ff'ff'ff'ff'ff'ff;
 
 struct FreeBlock
 {
-	union 
+	union
 	{
 		char* next;
 		std::uint64_t dummy_;
@@ -71,7 +76,7 @@ struct FreeBlock
 struct AllocatedBlock
 {
 	std::uint64_t size;
-	std::uint64_t dummy_; // todo rename
+	std::uint64_t guard;
 };
 
 
@@ -81,34 +86,34 @@ void FreeListAllocator::init(void* baseMemory, size_t memorySize)
 
 	static_assert(sizeof(FreeBlock) == sizeof(AllocatedBlock), "");
 
-	assert(memorySize > 100);
+	winAssertComment(memorySize > 100, "memory size must be greater than 100 bytes");
 
 	this->baseMemory = (char*)baseMemory;
 
 	//move base memory to a 8 byte aligned
 
 	size_t pos = (int)this->baseMemory;
-	
-	if(pos % 8 != 0)
+
+	if (pos % 8 != 0)
 	{
-		this->baseMemory += 8-(pos%8);
-		memorySize -= 8-(pos%8);
+		this->baseMemory += 8 - (pos % 8);
+		memorySize -= 8 - (pos % 8);
 	}
 
 	((FreeBlock*)this->baseMemory)->next = nullptr;
-	((FreeBlock*)this->baseMemory)->size = memorySize-sizeof(FreeBlock);
+	((FreeBlock*)this->baseMemory)->size = memorySize - sizeof(FreeBlock);
 
 
 }
 
 void* FreeListAllocator::allocate(size_t size)
 {
-	//todo optional check
-	assert(baseMemory); //err allocator not initialized
+
+	winAssert(baseMemory, "Allocator not initialized"); //err allocator not initialized
 
 
-	FreeBlock *last = nullptr;
-	FreeBlock *current = (FreeBlock*)baseMemory;
+	FreeBlock* last = nullptr;
+	FreeBlock* current = (FreeBlock*)baseMemory;
 
 	int aligned8Size = size;
 	if (aligned8Size % 8 != 0)
@@ -116,11 +121,9 @@ void* FreeListAllocator::allocate(size_t size)
 		aligned8Size += (8 - (aligned8Size % 8));
 	}
 
-	while(true)
+	while (true)
 	{
-	
-		//todo handle case when allocate near end
-		//todo handle case when a very small block remains
+
 
 		if (aligned8Size <= ((FreeBlock*)current)->size) // this is a suitable block
 		{
@@ -129,15 +132,15 @@ void* FreeListAllocator::allocate(size_t size)
 
 			FreeBlock* next = (FreeBlock*)current->next;
 
-			if(next == nullptr || next >= this->end) //this is the last block
+			if (next == nullptr || next >= this->end) //this is the last block
 			{
-				if(last == nullptr || last >= this->end) //this is also the first block so move the base pointer
+				if (last == nullptr || last >= this->end) //this is also the first block so move the base pointer
 				{
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
-					((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+					((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
-					FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size); 
+					FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
 					//next free block is the base memory now
 
 					baseMemory = (char*)nextFreeBlock;
@@ -147,46 +150,48 @@ void* FreeListAllocator::allocate(size_t size)
 					((FreeBlock*)baseMemory)->size = size;
 
 					return toReturn;
-				}else //this is not the first block so change the last block pointer
+				}
+				else //this is not the first block so change the last block pointer
 				{
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
-					((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+					((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 					FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
 
 					last->next = (char*)nextFreeBlock; //last is relinked
 					nextFreeBlock->next = nullptr; //this is the last block
-				
+
 					size_t size = this->getEnd() - (size_t)nextFreeBlock - (size_t)sizeof(FreeBlock); //set the size of the new last block
 					nextFreeBlock->size = size;
 
 					return toReturn;
 				}
-				
-			}else //this is not the last free block 
-			{	
-				
-				if(last == nullptr || last >= this->end) // this is the first free block but not the last 
+
+			}
+			else //this is not the last free block 
+			{
+
+				if (last == nullptr || last >= this->end) // this is the first free block but not the last 
 				{
 					size_t currentSize = ((FreeBlock*)current)->size;
 
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
-					
+
 					if (currentSize - aligned8Size < 24)
 					{
 						//too small block remaining
 
-						if(currentSize - aligned8Size < 0 || (currentSize - aligned8Size) % 8 != 0)
+						if (currentSize - aligned8Size < 0 || (currentSize - aligned8Size) % 8 != 0)
 						{
 							//heap corrupted
-							assert(0);
+							winAssert(0, "heap corupted");
 						}
 
 						aligned8Size += (currentSize - aligned8Size);
 
 						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
-						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+						((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 						FreeBlock* nextFreeBlock = next;
 						//next free block is the next block
@@ -195,7 +200,8 @@ void* FreeListAllocator::allocate(size_t size)
 
 						return toReturn;
 
-					}else
+					}
+					else
 					{
 						//add a new block
 						FreeBlock* newCreatedBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
@@ -203,33 +209,34 @@ void* FreeListAllocator::allocate(size_t size)
 						newCreatedBlock->next = (char*)next;
 
 						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allocated block
-						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+						((AllocatedBlock*)current)->guard = GUARD_VALUE;
 						baseMemory = (char*)newCreatedBlock;
 
 						return toReturn;
 					}
 
 
-					
-				}else // this is not the first free block and not the last 
+
+				}
+				else // this is not the first free block and not the last 
 				{	//todo fix here
 
 					void* toReturn = (char*)current + sizeof(AllocatedBlock);
 					size_t currentSize = ((FreeBlock*)current)->size;
 
 					if (currentSize - aligned8Size < 24)
-					{ 
+					{
 						//too small block remaining
 						if (currentSize - aligned8Size < 0 || (currentSize - aligned8Size) % 8 != 0)
 						{
 							//heap corrupted
-							assert(0);
+							winAssert(0, "heap corupted");
 						}
-					
+
 						aligned8Size += (currentSize - aligned8Size);
 
 						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
-						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+						((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 						//FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
 
@@ -240,8 +247,9 @@ void* FreeListAllocator::allocate(size_t size)
 						//nextFreeBlock->size = size;
 
 						return toReturn;
-					
-					}else
+
+					}
+					else
 					{
 						//add a new block
 						FreeBlock* newCreatedBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
@@ -249,7 +257,7 @@ void* FreeListAllocator::allocate(size_t size)
 						newCreatedBlock->next = (char*)next;
 
 						((AllocatedBlock*)current)->size = aligned8Size;	//size of the new allcoated block
-						((AllocatedBlock*)current)->dummy_ = DUMMY_VALUE;
+						((AllocatedBlock*)current)->guard = GUARD_VALUE;
 
 						//FreeBlock* nextFreeBlock = (FreeBlock*)((char*)toReturn + aligned8Size);
 
@@ -260,42 +268,44 @@ void* FreeListAllocator::allocate(size_t size)
 						//nextFreeBlock->size = size;
 
 						return toReturn;
-						
+
 					}
 
-					
+
 				}
 			}
 
-		}else
+		}
+		else
 		{
-			if(current->next == nullptr || current->next >= this->end)
+			if (current->next == nullptr || current->next >= this->end)
 			{
 				//that was the last block, no size
-				//todo remove notice
-				std::cout << "no more memory\n";
+				//std::cout << "no more memory\n";
 
-				if(returnZeroIfNoMoreMemory)
+				if (returnZeroIfNoMoreMemory)
 				{
 					return 0;
-				}else
+				}
+				else
 				{
-					assert(0);
+					winAssertComment(0, "Allocator out of memory");
 				}
 
-			}else
+			}
+			else
 			{
 				last = current;
 				current = (FreeBlock*)current->next;
-			
+
 			}
-		
+
 		}
 
 
 	}
 
-	assert(0);
+	winAssert(0);
 	return nullptr;
 }
 
@@ -312,22 +322,20 @@ void FreeListAllocator::free(void* mem)
 	AllocatedBlock* allocatedBLockHeader = (AllocatedBlock*)headerBegin;
 
 #pragma region check validity
-	//todo make this a controllable macro
-	
-	//todo add optional logging
-	assert(allocatedBLockHeader->dummy_ == DUMMY_VALUE); //invalid free or double free
-	allocatedBLockHeader->dummy_ = 0;
+
+	winAssertComment(allocatedBLockHeader->guard == GUARD_VALUE, "invalid free or double free"); //invalid free or double free
+	allocatedBLockHeader->guard = 0;
 #pragma endregion
 
 	size_t sizeOfTheFreedBlock = allocatedBLockHeader->size;
 
-	if(headerBegin < this->baseMemory) 
+	if (headerBegin < this->baseMemory)
 	{
 		//the freed memory is before the base memory so change the base memory
 		//this is the new base memory
 
-		if((size_t)headerBegin + sizeof(AllocatedBlock) + sizeOfTheFreedBlock == (size_t)this->baseMemory)
-		{	
+		if ((size_t)headerBegin + sizeof(AllocatedBlock) + sizeOfTheFreedBlock == (size_t)this->baseMemory)
+		{
 			//this merges with the current first free block so merge them
 
 			FreeBlock* firstFreeBlock = (FreeBlock*)allocatedBLockHeader;
@@ -336,10 +344,11 @@ void FreeListAllocator::free(void* mem)
 
 			this->baseMemory = (char*)firstFreeBlock;
 
-		}else if ((size_t)headerBegin + sizeof(AllocatedBlock) + sizeOfTheFreedBlock > (size_t)this->baseMemory)
+		}
+		else if ((size_t)headerBegin + sizeof(AllocatedBlock) + sizeOfTheFreedBlock > (size_t)this->baseMemory)
 		{
 			//heap corupted
-			assert(0);
+			winAssert(0, "heap corupted");
 		}
 		else
 		{	//this doesn't merge with the next free block so just link them
@@ -351,18 +360,19 @@ void FreeListAllocator::free(void* mem)
 			this->baseMemory = (char*)firstFreeBlock;
 		}
 
-	
-	}else
+
+	}
+	else
 	{
 		//the freed block is somewhere in the middle
 		//first search for the blocks before and after it
-		
+
 		FreeBlock* current = (FreeBlock*)baseMemory;
 		FreeBlock* next = (FreeBlock*)current->next;
 
 		while (true)
 		{
-			
+
 			if ((current < headerBegin && headerBegin < next)
 				||
 				(current < headerBegin && (next == nullptr || next >= this->end))
@@ -371,9 +381,9 @@ void FreeListAllocator::free(void* mem)
 				//the block is between 2 blocks
 				FreeBlock* theBlockBefore = current;
 				FreeBlock* theBlockAfter = (FreeBlock*)current->next;
-				
+
 				//merge with the block before
-				
+
 				FreeBlock* newCurent = nullptr;
 				//check if merged
 				if ((size_t)theBlockBefore + sizeof(FreeBlock) + theBlockBefore->size == (size_t)headerBegin)
@@ -386,7 +396,7 @@ void FreeListAllocator::free(void* mem)
 				else if ((size_t)theBlockBefore + sizeof(FreeBlock) + theBlockBefore->size > (size_t)headerBegin)
 				{
 					//error heap corupted
-					assert(0);
+					winAssert(0, "heap corupted");
 				}
 				else
 				{
@@ -400,39 +410,42 @@ void FreeListAllocator::free(void* mem)
 				}
 
 				//merge / link with next block
-				if(theBlockAfter != nullptr && theBlockAfter < this->end)
+				if (theBlockAfter != nullptr && theBlockAfter < this->end)
 				{
-				
-					if((size_t)newCurent + sizeof(FreeBlock) + newCurent->size == (size_t)theBlockAfter)
+
+					if ((size_t)newCurent + sizeof(FreeBlock) + newCurent->size == (size_t)theBlockAfter)
 					{
 						//merge
 						newCurent->size += sizeof(FreeBlock) + theBlockAfter->size;
 						newCurent->next = theBlockAfter->next;
 
-					}else if((size_t)newCurent + sizeof(FreeBlock) + newCurent->size > (size_t)theBlockAfter)
+					}
+					else if ((size_t)newCurent + sizeof(FreeBlock) + newCurent->size > (size_t)theBlockAfter)
 					{
 						//err
-						assert(0);
-					}else
+						winAssert(0, "heap corupted");
+					}
+					else
 					{
-					//just link
-					newCurent->next = (char*)theBlockAfter;
+						//just link
+						newCurent->next = (char*)theBlockAfter;
 
 					}
 
 				}
 
-				
+
 				break;
 			}
 
 			current = (FreeBlock*)current->next;
 			next = (FreeBlock*)current->next;
-		
-			if(current == nullptr || current >= this->end)
+
+			if (current == nullptr || current >= this->end)
 			{
 				//heap corupted or freed an invalid value
-				assert(0);
+				winAssert(0, "heap corupted or an invalid free");
+
 			}
 		}
 	}
@@ -460,6 +473,48 @@ void FreeListAllocator::threadSafeFree(void* mem)
 	mu.unlock();
 }
 
+void FreeListAllocator::calculateMemoryMetrics(size_t& availableMemory, size_t& biggestBlock, int& freeBlocks)
+{
+
+	availableMemory = 0;
+	biggestBlock = 0;
+	freeBlocks = 0;
+
+	if (!baseMemory) 
+	{		
+		return;
+	}
+
+
+	FreeBlock* last = nullptr;
+	FreeBlock* current = (FreeBlock*)baseMemory;
+
+	while (true)
+	{
+		freeBlocks++;
+		availableMemory += current->size;
+		biggestBlock = std::max(biggestBlock, current->size);
+
+		if (current->next == nullptr || current->next >= this->end)
+		{
+			//that was the last block
+
+			break;
+
+		}
+		else
+		{
+			last = current;
+			current = (FreeBlock*)current->next;
+		}
+
+
+	}
+
+	
+
+}
+
 
 
 #if WINDOWS_DYNAMIC_IMPLEMENTATION == 1
@@ -474,7 +529,7 @@ void FreeListAllocatorWinSpecific::init(size_t memorySize)
 	beginOfAllocatedSpace = base;
 	endOfReservedSpace = (char*)base + memorySize;
 	endOfAllocatedSpace = base;
-	
+
 	assert(extendAllocatedMemory(KB(1)));
 
 	allocator.returnZeroIfNoMoreMemory = true;
@@ -486,14 +541,15 @@ inline void* FreeListAllocatorWinSpecific::allocate(size_t size)
 {
 	void* rez = 0;
 
-	while(true)
+	while (true)
 	{
 		rez = allocator.allocate(size);
 
-		if(rez == nullptr)
+		if (rez == nullptr)
 		{
 			assert(this->extendAllocatedMemory(size));
-		}else
+		}
+		else
 		{
 			break;
 		}
@@ -537,7 +593,7 @@ inline void FreeListAllocatorWinSpecific::threadSafeFree(void* mem)
 
 bool FreeListAllocatorWinSpecific::extendAllocatedMemory(size_t size)
 {
-	if((char*)endOfAllocatedSpace + size > endOfReservedSpace)
+	if ((char*)endOfAllocatedSpace + size > endOfReservedSpace)
 	{
 		return false;
 	}
