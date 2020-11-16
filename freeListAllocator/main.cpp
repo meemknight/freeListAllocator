@@ -5,7 +5,6 @@
 #include <random>
 
 
-
 char memBlock[KB(2)] = {};
 FreeListAllocator allocator(memBlock, sizeof(memBlock));
 

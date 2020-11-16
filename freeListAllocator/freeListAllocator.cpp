@@ -4,6 +4,7 @@
 //https://github.com/meemknight/freeListAllocator
 //////////////////////////////////////////////////
 
+
 #include "freeListAllocator.h"
 #include <cstdint>
 
@@ -110,6 +111,7 @@ void* FreeListAllocator::allocate(size_t size)
 {
 
 	winAssert(baseMemory, "Allocator not initialized"); //err allocator not initialized
+
 
 
 	FreeBlock* last = nullptr;
@@ -226,6 +228,7 @@ void* FreeListAllocator::allocate(size_t size)
 
 					if (currentSize - aligned8Size < 24)
 					{
+
 						//too small block remaining
 						if (currentSize - aligned8Size < 0 || (currentSize - aligned8Size) % 8 != 0)
 						{
@@ -324,7 +327,7 @@ void FreeListAllocator::free(void* mem)
 #pragma region check validity
 
 	winAssertComment(allocatedBLockHeader->guard == GUARD_VALUE, "invalid free or double free"); //invalid free or double free
-	allocatedBLockHeader->guard = 0;
+
 #pragma endregion
 
 	size_t sizeOfTheFreedBlock = allocatedBLockHeader->size;
