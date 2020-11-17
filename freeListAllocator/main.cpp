@@ -13,7 +13,7 @@ FreeListAllocator allocator(memBlock, sizeof(memBlock));
 
 void* operator new  (std::size_t count)
 {
-	auto a = allocator.allocate(count);
+	auto a = allocator.threadSafeAllocate(count);
 
 	//std::cout << "Allocated " << count << " at " << a << '\n';
 
@@ -22,7 +22,7 @@ void* operator new  (std::size_t count)
 
 void* operator new[](std::size_t count)
 {
-	auto a = allocator.allocate(count);
+	auto a = allocator.threadSafeAllocate(count);
 
 	//std::cout << "Allocated " << count << " at " << a << '\n';
 
@@ -33,14 +33,14 @@ void operator delete  (void* ptr)
 {
 	//std::cout << "Deallocated at: " << ptr << "\n";
 
-	allocator.free(ptr);
+	allocator.threadSafeFree(ptr);
 }
 
 void operator delete[](void* ptr)
 {
 	//std::cout << "Deallocated at: " << ptr << "\n";
 
-	allocator.free(ptr);
+	allocator.threadSafeFree(ptr);
 }
 
 
