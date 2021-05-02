@@ -319,6 +319,7 @@ void* FreeListAllocator::allocate(size_t size)
 
 void FreeListAllocator::free(void* mem)
 {
+	if (mem == nullptr) { return; }
 
 	char* memoryBegin = (char*)mem;
 
@@ -474,6 +475,8 @@ void* FreeListAllocator::threadSafeAllocate(size_t size)
 
 void FreeListAllocator::threadSafeFree(void* mem)
 {
+	if (mem == nullptr) { return; }
+
 	mu.lock();
 
 	this->free(mem);
