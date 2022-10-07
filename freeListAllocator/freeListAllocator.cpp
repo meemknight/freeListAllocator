@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////
-//freeListAllocator.h				beta 0.2
+//freeListAllocator.h				beta 0.3
 //Copyright(c) 2020 Luta Vlad
 //https://github.com/meemknight/freeListAllocator
 //////////////////////////////////////////////////
@@ -7,7 +7,7 @@
 
 #include "freeListAllocator.h"
 #include <cstdint>
-
+#include <algorithm>
 
 #include <intrin.h>
 #pragma intrinsic (_InterlockedIncrement)
@@ -102,8 +102,9 @@ void FreeListAllocator::init(void* baseMemory, size_t memorySize)
 
 	if (pos % 8 != 0)
 	{
-		this->baseMemory += 8 - (pos % 8);
-		memorySize -= 8 - (pos % 8);
+		size_t newMem = ((size_t)this->baseMemory | 0b111);
+		memorySize -= (newMem)-(size_t)this->baseMemory;
+		this->baseMemory = (char *)newMem;
 	}
 
 	((FreeBlock*)this->baseMemory)->next = nullptr;
